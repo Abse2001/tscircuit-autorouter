@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test"
+import type { AnyCircuitElement } from "circuit-json"
 import {
   MIN_VIA_TO_VIA_CLEARANCE,
   getDrcErrors,
@@ -65,4 +66,89 @@ test("getDrcErrors allows vias at 0.1 clearance", () => {
   const { errors } = getDrcErrors(createViaPair(centerDistance))
 
   expect(errors).toHaveLength(0)
+})
+
+const createRotatedPadCircuitJson = (
+  traceRoute: Extract<AnyCircuitElement, { type: "pcb_trace" }>["route"],
+): AnyCircuitElement[] => [
+  {
+    type: "pcb_smtpad",
+    pcb_smtpad_id: "rotated_pad",
+    shape: "polygon",
+    layer: "top",
+    points: [
+      { x: -0.565685424949238, y: -0.848528137423857 },
+      { x: 0.848528137423857, y: 0.565685424949238 },
+      { x: 0.565685424949238, y: 0.848528137423857 },
+      { x: -0.848528137423857, y: -0.565685424949238 },
+    ],
+  },
+  {
+    type: "pcb_trace",
+    pcb_trace_id: "trace_0",
+    source_trace_id: "source_trace_0",
+    route: traceRoute,
+  },
+]
+
+test("getDrcErrors checks rotated rectangular pads using polygon geometry", () => {
+  const { errors } = getDrcErrors(
+    createRotatedPadCircuitJson([
+      { route_type: "wire", x: -0.8, y: -0.8, width: 0.05, layer: "top" },
+      { route_type: "wire", x: 0.8, y: 0.8, width: 0.05, layer: "top" },
+    ]),
+    { traceClearance: 0.1 },
+  )
+
+  expect(errors).toHaveLength(1)
+  expect(errors[0]).toMatchObject({
+    type: "pcb_trace_error",
+    pcb_trace_id: "trace_0",
+    pcb_trace_error_id: "overlap_trace_0_rotated_pad",
+  })
+})
+
+test("getDrcErrors does not report rotated pad bounding-box false positives", () => {
+  const { errors } = getDrcErrors(
+    createRotatedPadCircuitJson([
+      { route_type: "wire", x: -0.8, y: 0.6, width: 0.05, layer: "top" },
+      { route_type: "wire", x: -0.4, y: 0.6, width: 0.05, layer: "top" },
+    ]),
+    { traceClearance: 0.1 },
+  )
+
+  expect(errors).toHaveLength(0)
+})
+
+test("getDrcErrors places rotated pad markers on the actual conflict", () => {
+  const { locationAwareErrors } = getDrcErrors(
+    [
+      {
+        type: "pcb_smtpad",
+        pcb_smtpad_id: "diamond_pad",
+        shape: "polygon",
+        layer: "top",
+        points: [
+          { x: 0, y: 1 },
+          { x: 1, y: 0 },
+          { x: 0, y: -1 },
+          { x: -1, y: 0 },
+        ],
+      },
+      {
+        type: "pcb_trace",
+        pcb_trace_id: "trace_0",
+        source_trace_id: "source_trace_0",
+        route: [
+          { route_type: "wire", x: 0.75, y: -0.5, width: 0.05, layer: "top" },
+          { route_type: "wire", x: 0.75, y: 0.5, width: 0.05, layer: "top" },
+        ],
+      },
+    ],
+    { traceClearance: 0.1 },
+  )
+
+  expect(locationAwareErrors).toHaveLength(1)
+  expect(locationAwareErrors[0].center.x).toBeCloseTo(0.75)
+  expect(locationAwareErrors[0].center.y).toBeCloseTo(0)
 })

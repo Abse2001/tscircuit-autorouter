@@ -316,6 +316,12 @@ const convertObstacleToOldFormat = (
     height: obstacle.height,
     rotation: rotationDegrees,
   }
+  const originalRotatedRect = {
+    center: obstacle.center,
+    width: obstacle.width,
+    height: obstacle.height,
+    ccwRotationDegrees: rotationDegrees,
+  }
   const rectCount = getRotatedObstacleApproximationRectCount(obstacle)
   const rects = opts.useSparseCenterlineApproximation
     ? generateSparseCenterlineApproximatingRects(rotatedRect)
@@ -352,6 +358,7 @@ const convertObstacleToOldFormat = (
           : undefined,
     connectedTo:
       index === connectedRectIndex ? obstacleWithoutRotation.connectedTo : [],
+    originalRotatedRect,
     center: rect.center,
     width: rect.width,
     height: rect.height,

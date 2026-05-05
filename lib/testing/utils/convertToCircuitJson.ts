@@ -1,10 +1,11 @@
+import { pointToBoxDistance } from "@tscircuit/math-utils"
 import type { AnyCircuitElement, PcbTrace, PcbVia } from "circuit-json"
+import { getRectPoints } from "lib/autorouter-pipelines/AutoroutingPipeline6_PolyHypergraph/srjToPolyHyperGraph"
 import { Obstacle, SimpleRouteJson, SimplifiedPcbTrace } from "lib/types"
 import { HighDensityRoute } from "lib/types/high-density-types"
 import { getConnectionPointLayers } from "lib/types/srj-types"
 import { getViaDimensions } from "lib/utils/getViaDimensions"
 import { LayerName, mapZToLayerName } from "lib/utils/mapZToLayerName"
-import { pointToBoxDistance } from "@tscircuit/math-utils"
 
 /**
  * Convert a simplified PCB trace from the autorouter to a circuit-json compatible PCB trace
@@ -344,6 +345,43 @@ function getBestObstaclePcbPortId(
   return bestPcbPortId ?? candidatePortIds[0]
 }
 
+const hasFiniteRotation = (
+  obstacle: Obstacle,
+): obstacle is Obstacle & { ccwRotationDegrees: number } =>
+  typeof obstacle.ccwRotationDegrees === "number" &&
+  Number.isFinite(obstacle.ccwRotationDegrees)
+
+const getPhysicalRotatedRect = (obstacle: Obstacle) => {
+  if (
+    obstacle.originalRotatedRect &&
+    Number.isFinite(obstacle.originalRotatedRect.ccwRotationDegrees)
+  ) {
+    return obstacle.originalRotatedRect
+  }
+
+  if (!hasFiniteRotation(obstacle)) return null
+
+  return {
+    center: obstacle.center,
+    width: obstacle.width,
+    height: obstacle.height,
+    ccwRotationDegrees: obstacle.ccwRotationDegrees,
+  }
+}
+
+const layerNames = new Set<string>([
+  "top",
+  "bottom",
+  "inner1",
+  "inner2",
+  "inner3",
+  "inner4",
+  "inner5",
+  "inner6",
+])
+
+const isLayerName = (layer: string): layer is LayerName => layerNames.has(layer)
+
 /**
  * Create pad-like circuit-json elements from SRJ obstacles.
  * Multi-layer obstacles represent plated holes and must not be deduped away
@@ -374,13 +412,14 @@ function createPcbPadElements(srj: SimpleRouteJson): AnyCircuitElement[] {
 
     if (!smtPadId && !platedHoleId && !pcbPortId) continue
 
-    const layers = obstacle.layers
+    const layers = obstacle.layers.filter(isLayerName)
     if (layers.length === 0) continue
 
     const width = obstacle.width
     const height = obstacle.height
     const x = obstacle.center.x
     const y = obstacle.center.y
+    const physicalRotatedRect = getPhysicalRotatedRect(obstacle)
 
     const isMultiLayerObstacle = layers.length > 1
 
@@ -389,6 +428,33 @@ function createPcbPadElements(srj: SimpleRouteJson): AnyCircuitElement[] {
         platedHoleId ?? `pcb_plated_hole_${x.toFixed(3)}_${y.toFixed(3)}`
       if (addedPlatedHoleIds.has(id)) continue
       addedPlatedHoleIds.add(id)
+
+      if (physicalRotatedRect) {
+        const holeDiameter = Math.max(
+          Math.min(physicalRotatedRect.width, physicalRotatedRect.height) * 0.5,
+          0.1,
+        )
+        pads.push({
+          type: "pcb_plated_hole",
+          pcb_plated_hole_id: id,
+          shape: "rotated_pill_hole_with_rect_pad",
+          hole_shape: "rotated_pill",
+          pad_shape: "rect",
+          hole_width: holeDiameter,
+          hole_height: holeDiameter,
+          hole_ccw_rotation: physicalRotatedRect.ccwRotationDegrees,
+          rect_pad_width: physicalRotatedRect.width,
+          rect_pad_height: physicalRotatedRect.height,
+          rect_ccw_rotation: physicalRotatedRect.ccwRotationDegrees,
+          hole_offset_x: 0,
+          hole_offset_y: 0,
+          x: physicalRotatedRect.center.x,
+          y: physicalRotatedRect.center.y,
+          layers,
+          ...(pcbPortId ? { pcb_port_id: pcbPortId } : {}),
+        })
+        continue
+      }
 
       const isCircularLike = Math.abs(width - height) < 0.001
 
@@ -403,7 +469,7 @@ function createPcbPadElements(srj: SimpleRouteJson): AnyCircuitElement[] {
           y,
           layers,
           ...(pcbPortId ? { pcb_port_id: pcbPortId } : {}),
-        } as any)
+        })
         continue
       }
 
@@ -428,6 +494,23 @@ function createPcbPadElements(srj: SimpleRouteJson): AnyCircuitElement[] {
     const id = smtPadId ?? `pcb_smtpad_${x.toFixed(3)}_${y.toFixed(3)}`
     if (addedSmtPadIds.has(id)) continue
     addedSmtPadIds.add(id)
+
+    if (physicalRotatedRect) {
+      pads.push({
+        type: "pcb_smtpad",
+        pcb_smtpad_id: id,
+        layer: layers[0],
+        shape: "polygon",
+        points: getRectPoints({
+          center: physicalRotatedRect.center,
+          width: physicalRotatedRect.width,
+          height: physicalRotatedRect.height,
+          ccwRotationDegrees: physicalRotatedRect.ccwRotationDegrees,
+        }),
+        ...(pcbPortId ? { pcb_port_id: pcbPortId } : {}),
+      })
+      continue
+    }
 
     pads.push({
       type: "pcb_smtpad",

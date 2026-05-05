@@ -9,22 +9,22 @@ import { AssignableAutoroutingPipeline1Solver } from "lib/autorouter-pipelines/A
 import { AssignableAutoroutingPipeline2 } from "lib/autorouter-pipelines/AssignableAutoroutingPipeline2/AssignableAutoroutingPipeline2"
 import { AssignableAutoroutingPipeline3 } from "lib/autorouter-pipelines/AssignableAutoroutingPipeline3/AssignableAutoroutingPipeline3"
 import { AutoroutingPipeline1_OriginalUnravel } from "lib/autorouter-pipelines/AutoroutingPipeline1_OriginalUnravel/AutoroutingPipeline1_OriginalUnravel"
-import { AutoroutingPipelineSolver3_HgPortPointPathing } from "lib/autorouter-pipelines/AutoroutingPipeline3_HgPortPointPathing/AutoroutingPipelineSolver3_HgPortPointPathing"
-import { AutoroutingPipelineSolver4 } from "lib/autorouter-pipelines/AutoroutingPipeline4_TinyHypergraph/AutoroutingPipelineSolver4_TinyHypergraph"
-import { AutoroutingPipelineSolver5 } from "lib/autorouter-pipelines/AutoroutingPipeline5_HdCache/AutoroutingPipelineSolver5_HdCache"
-import { AutoroutingPipelineSolver6 } from "lib/autorouter-pipelines/AutoroutingPipeline6_PolyHypergraph/AutoroutingPipelineSolver6_PolyHypergraph"
 import {
   AutoroutingPipelineSolver2_PortPointPathing,
   CapacityMeshSolver,
 } from "lib/autorouter-pipelines/AutoroutingPipeline2_PortPointPathing/AutoroutingPipelineSolver2_PortPointPathing"
+import { AutoroutingPipelineSolver3_HgPortPointPathing } from "lib/autorouter-pipelines/AutoroutingPipeline3_HgPortPointPathing/AutoroutingPipelineSolver3_HgPortPointPathing"
+import { AutoroutingPipelineSolver4 } from "lib/autorouter-pipelines/AutoroutingPipeline4_TinyHypergraph/AutoroutingPipelineSolver4_TinyHypergraph"
+import { AutoroutingPipelineSolver5 } from "lib/autorouter-pipelines/AutoroutingPipeline5_HdCache/AutoroutingPipelineSolver5_HdCache"
+import { AutoroutingPipelineSolver6 } from "lib/autorouter-pipelines/AutoroutingPipeline6_PolyHypergraph/AutoroutingPipelineSolver6_PolyHypergraph"
 import {
   getGlobalInMemoryCache,
   getGlobalLocalStorageCache,
 } from "lib/cache/setupGlobalCaches"
 import { CacheProvider } from "lib/cache/types"
 import { BaseSolver } from "lib/solvers/BaseSolver"
-import { getPendingEffectsFromSolverTree } from "lib/solvers/getPendingEffectsFromSolverTree"
 import { getNodesNearNode } from "lib/solvers/UnravelSolver/getNodesNearNode"
+import { getPendingEffectsFromSolverTree } from "lib/solvers/getPendingEffectsFromSolverTree"
 import { SimpleRouteJson } from "lib/types"
 import { addVisualizationToLastStep } from "lib/utils/addVisualizationToLastStep"
 import { combineVisualizations } from "lib/utils/combineVisualizations"
@@ -40,16 +40,15 @@ import {
   type PipelineId,
 } from "./AutoroutingPipelineMenuBar"
 import { CacheDebugger } from "./CacheDebugger"
+import { KrtAutoroutingPipelineSolver } from "./KrtAutoroutingPipelineSolver"
 import { SolveBreakpointDialog } from "./SolveBreakpointDialog"
+import { getCurrentCircuitJson } from "./autorouting-pipeline-debugger/getCurrentCircuitJson"
 import { RELAXED_DRC_OPTIONS } from "./drcPresets"
 import { getDrcErrors } from "./getDrcErrors"
-import { getCurrentCircuitJson } from "./autorouting-pipeline-debugger/getCurrentCircuitJson"
-import { convertToCircuitJson } from "./utils/convertToCircuitJson"
 import { extractCapacityMeshNodeIdFromObjectLabel } from "./utils/extractCapacityMeshNodeIdFromObjectLabel"
 import { filterUnravelMultiSectionInput } from "./utils/filterUnravelMultiSectionInput"
 import { getHighDensityNodeDownloadData } from "./utils/getHighDensityNodeDownloadData"
 import { prepareParamsForDownload } from "./utils/prepareParamsForDownload"
-import { KrtAutoroutingPipelineSolver } from "./KrtAutoroutingPipelineSolver"
 
 const PIPELINE_SOLVERS = {
   AutoroutingPipelineSolver2_PortPointPathing,
@@ -792,12 +791,14 @@ export const AutoroutingPipelineDebugger = ({
         return
       }
 
-      // Convert to circuit-json format with both connection information and routes
-      const circuitJson = convertToCircuitJson(
-        srjWithPointPairs,
-        routes,
-        solver.srj.minTraceWidth,
-      )
+      // Convert to circuit-json format with both connection information and
+      // original physical obstacle geometry for DRC.
+      const circuitJson =
+        getCurrentCircuitJson(solver, (message) => window.alert(message)) ?? []
+
+      if (circuitJson.length === 0) {
+        return
+      }
 
       const { errors: allErrors, locationAwareErrors } =
         mode === "relaxed"

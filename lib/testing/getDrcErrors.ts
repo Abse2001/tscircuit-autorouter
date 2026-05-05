@@ -4,6 +4,11 @@ import {
   checkSameNetViaSpacing,
 } from "@tscircuit/checks"
 import { Point } from "graphics-debug"
+import {
+  type GeometryAwarePadTraceError,
+  getGeometryAwarePadIds,
+  getGeometryAwarePadTraceErrors,
+} from "./getGeometryAwarePadTraceErrors"
 
 type CircuitJson = Parameters<typeof checkEachPcbTraceNonOverlapping>[0]
 type CircuitJsonElement = CircuitJson[number]
@@ -15,7 +20,7 @@ type DifferentNetViaError = ReturnType<
 >[number]
 type ViaError = SameNetViaError | DifferentNetViaError
 
-type DrcError = TraceError | ViaError
+type DrcError = TraceError | ViaError | GeometryAwarePadTraceError
 
 type DrcErrorWithCenter = DrcError & { center?: Point }
 
@@ -23,6 +28,7 @@ type LocationAwareDrcError = DrcError & { center: Point }
 
 export const MIN_VIA_TO_VIA_CLEARANCE = 0.1
 export const PREFERRED_VIA_TO_VIA_CLEARANCE = 0.2
+const DEFAULT_TRACE_CLEARANCE = 0.1
 
 export interface GetDrcErrorsResult {
   errors: DrcError[]
@@ -46,6 +52,21 @@ export const getDrcErrors = (
   const traceErrors = checkEachPcbTraceNonOverlapping(circuitJson, {
     minClearance: options.traceClearance,
   })
+  const geometryAwarePadIds = getGeometryAwarePadIds(circuitJson)
+  const geometryAwareTraceErrors = getGeometryAwarePadTraceErrors(
+    circuitJson,
+    options.traceClearance ?? DEFAULT_TRACE_CLEARANCE,
+  )
+  const geometryAwareTraceErrorIds = new Set(
+    geometryAwareTraceErrors.map((error) => error.pcb_trace_error_id),
+  )
+  const filteredTraceErrors = traceErrors.filter((error) => {
+    if (geometryAwareTraceErrorIds.has(error.pcb_trace_error_id)) return false
+
+    return ![...geometryAwarePadIds].some((padId) =>
+      error.pcb_trace_error_id.endsWith(`_${padId}`),
+    )
+  })
   const viaErrors = [
     ...checkSameNetViaSpacing(circuitJson, {
       minClearance: viaClearance,
@@ -55,7 +76,11 @@ export const getDrcErrors = (
     }),
   ]
 
-  const errors: DrcError[] = [...traceErrors, ...viaErrors]
+  const errors: DrcError[] = [
+    ...filteredTraceErrors,
+    ...geometryAwareTraceErrors,
+    ...viaErrors,
+  ]
 
   const vias = circuitJson.filter(
     (
