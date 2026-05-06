@@ -44,10 +44,14 @@ jobs:
             })
 
             const command = (context.payload.comment.body || '').trim().split(/\s+/)[0] || ''
+            const args = (context.payload.comment.body || '').trim().split(/\s+/).slice(1)
             const focused = command === '/usf'
             const isSameRepo = pr.data.head.repo.full_name === `${context.repo.owner}/${context.repo.repo}`
+            const forkPatch = !isSameRepo && args.includes('--fork')
             const title = focused ? '## 📸 Update Snapshots (focused)' : '## 📸 Update Snapshots'
-            const statusLine = focused
+            const statusLine = forkPatch
+              ? `⏳ Running snapshot update on fork commit \`${pr.data.head.sha.slice(0, 7)}\` and preparing a patch artifact...`
+              : focused
               ? `⏳ Finding recent failed test files and updating relevant snapshots on \`${pr.data.head.sha.slice(0, 7)}\`...`
               : `⏳ Running snapshot update on \`${pr.data.head.sha.slice(0, 7)}\`...`
 
@@ -66,29 +70,33 @@ jobs:
 
             core.setOutput('head_sha', pr.data.head.sha)
             core.setOutput('head_ref', pr.data.head.ref)
+            core.setOutput('head_repo', pr.data.head.repo.full_name)
             core.setOutput('can_push', isSameRepo ? 'true' : 'false')
+            core.setOutput('fork_patch', forkPatch ? 'true' : 'false')
             core.setOutput('focused', focused ? 'true' : 'false')
             core.setOutput('status_comment_id', String(statusComment.data.id))
 
       - name: Checkout PR branch
-        if: steps.parse.outputs.can_push == 'true'
+        if: steps.parse.outputs.can_push == 'true' || steps.parse.outputs.fork_patch == 'true'
         uses: actions/checkout@v4
         with:
           token: ${{ secrets.TSCIRCUIT_BOT_GITHUB_TOKEN }}
-          ref: ${{ steps.parse.outputs.head_ref }}
+          repository: ${{ steps.parse.outputs.head_repo }}
+          ref: ${{ steps.parse.outputs.can_push == 'true' && steps.parse.outputs.head_ref || steps.parse.outputs.head_sha }}
+          persist-credentials: ${{ steps.parse.outputs.can_push == 'true' }}
 
       - name: Setup bun
-        if: steps.parse.outputs.can_push == 'true'
+        if: steps.parse.outputs.can_push == 'true' || steps.parse.outputs.fork_patch == 'true'
         uses: oven-sh/setup-bun@v2
         with:
           bun-version: latest
 
       - name: Install dependencies
-        if: steps.parse.outputs.can_push == 'true'
+        if: steps.parse.outputs.can_push == 'true' || steps.parse.outputs.fork_patch == 'true'
         run: bun install
 
       - name: Find failed test files
-        if: steps.parse.outputs.can_push == 'true' && steps.parse.outputs.focused == 'true'
+        if: (steps.parse.outputs.can_push == 'true' || steps.parse.outputs.fork_patch == 'true') && steps.parse.outputs.focused == 'true'
         id: failed_tests
         continue-on-error: true
         uses: actions/github-script@v7
@@ -230,7 +238,7 @@ jobs:
             core.setOutput('source_run_url', '')
 
       - name: Update snapshots
-        if: steps.parse.outputs.can_push == 'true'
+        if: steps.parse.outputs.can_push == 'true' || steps.parse.outputs.fork_patch == 'true'
         id: update_snapshots
         env:
           BUN_UPDATE_SNAPSHOTS: "1"
@@ -261,7 +269,7 @@ jobs:
           exit 0
 
       - name: Verify focused tests
-        if: steps.parse.outputs.can_push == 'true' && steps.parse.outputs.focused == 'true' && steps.failed_tests.outputs.relevant_files != ''
+        if: (steps.parse.outputs.can_push == 'true' || steps.parse.outputs.fork_patch == 'true') && steps.parse.outputs.focused == 'true' && steps.failed_tests.outputs.relevant_files != ''
         id: verify_focused
         env:
           RELEVANT_FILES: ${{ steps.failed_tests.outputs.relevant_files }}
@@ -274,6 +282,26 @@ jobs:
             echo "Focused verification exited with code $exit_code; continuing so snapshot updates can still be committed."
           fi
           exit 0
+
+      - name: Create snapshot patch for fork PR
+        if: steps.parse.outputs.fork_patch == 'true' && always()
+        id: fork_patch
+        run: |
+          if git diff --quiet -- tests; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          git diff --binary -- tests > snapshot-updates.patch
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+
+      - name: Upload snapshot patch artifact
+        if: steps.parse.outputs.fork_patch == 'true' && steps.fork_patch.outputs.changed == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: snapshot-updates
+          path: snapshot-updates.patch
+          if-no-files-found: error
 
       - name: Commit and push snapshot updates
         if: steps.parse.outputs.can_push == 'true' && always()
@@ -299,7 +327,7 @@ jobs:
 
       - name: Mark workflow failed when bun test fails
         if: |
-          steps.parse.outputs.can_push == 'true' &&
+          (steps.parse.outputs.can_push == 'true' || steps.parse.outputs.fork_patch == 'true') &&
           always() &&
           (
             steps.update_snapshots.outputs.exit_code != '0' ||
@@ -316,6 +344,8 @@ jobs:
         uses: actions/github-script@v7
         env:
           CAN_PUSH: ${{ steps.parse.outputs.can_push }}
+          FORK_PATCH: ${{ steps.parse.outputs.fork_patch }}
+          PATCH_CHANGED: ${{ steps.fork_patch.outputs.changed }}
           CHANGED: ${{ steps.commit.outputs.changed }}
           COMMIT_SHA: ${{ steps.commit.outputs.commit_sha }}
           FOCUSED: ${{ steps.parse.outputs.focused }}
@@ -358,9 +388,37 @@ jobs:
             const verifyFailed = process.env.VERIFY_EXIT_CODE && process.env.VERIFY_EXIT_CODE !== '0'
             let body = ''
 
-            if (process.env.CAN_PUSH !== 'true') {
+            if (process.env.FORK_PATCH === 'true') {
+              if (process.env.PATCH_CHANGED === 'true') {
+                body = makeBody([
+                  '✅ Snapshot updates were prepared as a patch artifact for this fork PR.',
+                  '',
+                  'Apply and commit them from your fork checkout:',
+                  '',
+                  '```bash',
+                  `gh run download ${{ github.run_id }} -n snapshot-updates`,
+                  'git apply snapshot-updates.patch',
+                  'git add tests',
+                  'git commit -m "Update test snapshots"',
+                  'git push',
+                  '```',
+                ])
+              } else if (testFailed || verifyFailed) {
+                body = makeBody([
+                  '❌ Snapshot update failed and no patch was produced for this fork PR.',
+                  ...(testFailed ? [`Snapshot update test exited with code ${process.env.TEST_EXIT_CODE}.`] : []),
+                  ...(verifyFailed ? [`Focused verification exited with code ${process.env.VERIFY_EXIT_CODE}.`] : []),
+                ])
+              } else {
+                body = makeBody([
+                  '✅ No snapshot changes were produced for this fork PR; nothing to apply.',
+                ])
+              }
+            } else if (process.env.CAN_PUSH !== 'true') {
               body = makeBody([
-                '⚠️ This command only supports PR branches from this repository (not forks).',
+                '⚠️ This command only supports PR branches from this repository by default.',
+                '',
+                'For fork PRs, rerun the command with `--fork` to generate a ready-to-apply patch artifact.',
               ])
             } else if ((testFailed || verifyFailed) && process.env.CHANGED === 'true') {
               const failureLines = [
