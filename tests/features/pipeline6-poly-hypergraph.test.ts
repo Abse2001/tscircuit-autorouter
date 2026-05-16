@@ -121,7 +121,7 @@ test("Pipeline6 defaults projectedRect area expansion above equivalent area", ()
   expect(solver.minProjectedRectDimension).toBeCloseTo(0.45)
 })
 
-test("Pipeline6 falls back when constrained triangulation fails", async () => {
+test("Pipeline6 resolves dataset01 circuit100 with constrained triangulation", async () => {
   const scenarios = await loadScenarios("dataset01")
   const circuit100 = scenarios.find(([name]) => name === "circuit100")?.[1]
   expect(circuit100).toBeDefined()
@@ -130,7 +130,7 @@ test("Pipeline6 falls back when constrained triangulation fails", async () => {
     srj: circuit100!,
   })
 
-  expect(solver.usedUnconstrainedDelaunayFallback).toBe(true)
+  expect(solver.usedUnconstrainedDelaunayFallback).toBe(false)
   expect(solver.convexRegions.regions.length).toBeGreaterThan(0)
 })
 
