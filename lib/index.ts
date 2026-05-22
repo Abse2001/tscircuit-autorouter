@@ -20,6 +20,7 @@ export {
   AutoroutingPipelineSolver6_PolyHypergraph,
 } from "./autorouter-pipelines/AutoroutingPipeline6_PolyHypergraph/AutoroutingPipelineSolver6_PolyHypergraph"
 export { AutoroutingPipelineSolver7_MultiGraph } from "./autorouter-pipelines/AutoroutingPipeline7_MultiGraph/AutoroutingPipelineSolver7_MultiGraph"
+export { AutoroutingPipelineSolver8 } from "./autorouter-pipelines/AutoroutingPipeline8/AutoroutingPipelineSolver8"
 export { PolyHighDensitySolver } from "./autorouter-pipelines/AutoroutingPipeline6_PolyHypergraph/PolyHighDensitySolver"
 export { PolySingleIntraNodeSolver } from "./autorouter-pipelines/AutoroutingPipeline6_PolyHypergraph/PolySingleIntraNodeSolver"
 export { PolyIntraNodeSolver } from "./autorouter-pipelines/AutoroutingPipeline6_PolyHypergraph/PolyIntraNodeSolver"
@@ -51,6 +52,7 @@ export type {
   HighDensityIntraNodeRouteWithJumpers,
 } from "./types/high-density-types"
 export { HyperSingleIntraNodeSolver } from "./solvers/HyperHighDensitySolver/HyperSingleIntraNodeSolver"
+export { GrowShrinkHighDensityIntraNodeSolver } from "./solvers/HyperHighDensitySolver/GrowShrinkHighDensityIntraNodeSolver"
 export { GlobalDrcForceImproveSolver } from "high-density-repair03/lib"
 export type {
   DrcError,
