@@ -32,7 +32,12 @@ default_concurrency() {
   getconf _NPROCESSORS_ONLN 2>/dev/null || nproc 2>/dev/null || echo 4
 }
 
-CONCURRENCY="${BENCHMARK_CONCURRENCY:-$(default_concurrency)}"
+DEFAULT_CONCURRENCY="$(default_concurrency)"
+if [ "$DEFAULT_CONCURRENCY" -gt 12 ]; then
+  DEFAULT_CONCURRENCY=12
+fi
+
+CONCURRENCY="${BENCHMARK_CONCURRENCY:-$DEFAULT_CONCURRENCY}"
 
 get_solvers() {
   INCLUDE_ASSIGNABLE="$INCLUDE_ASSIGNABLE" bun --eval '
@@ -156,7 +161,7 @@ while [ "$#" -gt 0 ]; do
     --concurrency)
       CONCURRENCY="${2:-}"
       if [ "$CONCURRENCY" = "auto" ]; then
-        CONCURRENCY="$(default_concurrency)"
+         CONCURRENCY="$DEFAULT_CONCURRENCY"
       fi
       shift 2
       ;;
