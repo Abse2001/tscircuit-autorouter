@@ -245,7 +245,7 @@ export class NetToPointPairsSolver extends BaseSolver {
           x: point.x,
           y: point.y,
           color: "red",
-          label: connection.name,
+          label: point.pcb_port_id ?? point.pointId,
         })
       })
 
@@ -272,6 +272,7 @@ export class NetToPointPairsSolver extends BaseSolver {
             connection.pointsToConnect[b],
           ],
           strokeColor: "rgba(255,0,0,0.25)",
+          label: connection.name,
         })
       }
     })
@@ -286,7 +287,7 @@ export class NetToPointPairsSolver extends BaseSolver {
           x: point.x,
           y: point.y,
           color: color,
-          label: connection.name,
+          label: point.pcb_port_id ?? point.pointId,
         })
       })
 
@@ -299,6 +300,7 @@ export class NetToPointPairsSolver extends BaseSolver {
               connection.pointsToConnect[j],
             ],
             strokeColor: color,
+            label: connection.name,
           })
         }
       }

@@ -14,6 +14,7 @@ test("benchmark datasets load in sample order", async () => {
   const srj20Scenarios = await loadScenarios("srj20")
   const srj23Scenarios = await loadScenarios("srj23")
   const srj24Scenarios = await loadScenarios("srj24")
+  const srj27Scenarios = await loadScenarios("srj27")
 
   expect(srj11Scenarios).toHaveLength(26)
   expect(srj11Scenarios[0][0]).toBe("sample001Circuit")
@@ -50,15 +51,20 @@ test("benchmark datasets load in sample order", async () => {
   expect(srj20Scenarios[199][0]).toBe("sample200Circuit")
   expect(srj20Scenarios[0][1].connections.length).toBeGreaterThan(0)
 
-  expect(srj23Scenarios).toHaveLength(107)
+  expect(srj23Scenarios).toHaveLength(76)
   expect(srj23Scenarios[0][0]).toBe("circuit001")
-  expect(srj23Scenarios[106][0]).toBe("circuit107")
+  expect(srj23Scenarios[75][0]).toBe("circuit106")
   expect(srj23Scenarios[0][1].connections.length).toBeGreaterThan(0)
 
   expect(srj24Scenarios).toHaveLength(10)
   expect(srj24Scenarios[0][0]).toBe("sample001")
   expect(srj24Scenarios[9][0]).toBe("sample010")
   expect(srj24Scenarios[0][1].connections.length).toBeGreaterThan(0)
+
+  expect(srj27Scenarios).toHaveLength(6)
+  expect(srj27Scenarios[0][0]).toBe("sample001")
+  expect(srj27Scenarios[5][0]).toBe("sample006")
+  expect(srj27Scenarios[0][1].connections.length).toBeGreaterThan(0)
 
   const sample11 = await loadScenarioBySampleNumber("srj11", 11)
   expect(sample11.scenarioName).toBe("sample011Circuit")
@@ -81,10 +87,14 @@ test("benchmark datasets load in sample order", async () => {
   expect(sample20.totalSamples).toBe(200)
 
   const sample23 = await loadScenarioBySampleNumber("srj23", 23)
-  expect(sample23.scenarioName).toBe("circuit023")
-  expect(sample23.totalSamples).toBe(107)
+  expect(sample23.scenarioName).toBe("circuit029")
+  expect(sample23.totalSamples).toBe(76)
 
   const sample24 = await loadScenarioBySampleNumber("srj24", 10)
   expect(sample24.scenarioName).toBe("sample010")
   expect(sample24.totalSamples).toBe(10)
+
+  const sample27 = await loadScenarioBySampleNumber("srj27", 6)
+  expect(sample27.scenarioName).toBe("sample006")
+  expect(sample27.totalSamples).toBe(6)
 })

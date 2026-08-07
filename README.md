@@ -59,6 +59,8 @@ interface SimpleRouteJson {
   minTraceWidth: number
   obstacles: Obstacle[]
   connections: Array<SimpleRouteConnection>
+  buses?: Array<SimpleRouteBus>
+  allowViaInPad?: boolean
   bounds: { minX: number; maxX: number; minY: number; maxY: number }
   traces?: SimplifiedPcbTraces // Optional for input
 }
@@ -79,7 +81,33 @@ interface SimpleRouteConnection {
   name: string
   pointsToConnect: Array<{ x: number; y: number; layer: string }>
 }
+
+interface SimpleRouteBus {
+  busId: string
+  connectionNames: string[] // Ordered SimpleRouteConnection names
+  maxLengthSkew?: number // Maximum routed-length difference in millimeters
+  traceWidth?: number // Resolved copper width in millimeters
+  allowedLayers?: string[] // Legal routing layers, including terminal layers
+}
+
+interface DifferentialPair {
+  connectionNames: [string, string]
+  lengthTolerance: number // Maximum pair skew in millimeters
+  traceGap?: number // Resolved edge-to-edge copper gap in millimeters
+  maxUncoupledLength?: number // Maximum uncoupled length in millimeters
+}
 ```
+
+`maxLengthSkew` records the maximum permitted routed-length difference for the
+bus. Bus metadata is preserved in the output so routing implementations can
+apply the constraint without losing the original membership or ordering.
+`traceWidth`, `traceGap`, and `allowedLayers` are resolved routing geometry;
+stackup-aware impedance targets should be converted to these dimensions before
+creating SimpleRouteJson.
+
+Via-in-pad repair is disabled by default because it generally requires filled
+and capped vias. Set `allowViaInPad: true` only when the fabrication process
+supports it.
 
 ### Output Format
 
@@ -151,3 +179,7 @@ bun test
 # Build the library
 bun run build
 ```
+
+## Maintainer resources
+
+Track routing performance and benchmark results in the [Autorouter Benchmark Dashboard](https://autorouter-benchmark-dashboard.vercel.app/).

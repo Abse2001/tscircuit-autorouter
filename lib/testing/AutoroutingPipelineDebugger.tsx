@@ -15,6 +15,7 @@ import { AutoroutingPipelineSolver5 } from "lib/autorouter-pipelines/Autorouting
 import { AutoroutingPipelineSolver6 } from "lib/autorouter-pipelines/AutoroutingPipeline6_PolyHypergraph/AutoroutingPipelineSolver6_PolyHypergraph"
 import { AutoroutingPipelineSolver7_MultiGraph } from "lib/autorouter-pipelines/AutoroutingPipeline7_MultiGraph/AutoroutingPipelineSolver7_MultiGraph"
 import { AutoroutingPipelineSolver8 } from "lib/autorouter-pipelines/AutoroutingPipeline8/AutoroutingPipelineSolver8"
+import { AutoroutingPipelineSolver9_PreloadedTraceGraph } from "lib/autorouter-pipelines/AutoroutingPipeline9_PreloadedTraceGraph/autorouting-pipeline-solver9-preloaded-trace-graph"
 import {
   AutoroutingPipelineSolver2_PortPointPathing,
   CapacityMeshSolver,
@@ -43,7 +44,7 @@ import {
 } from "./AutoroutingPipelineMenuBar"
 import { CacheDebugger } from "./CacheDebugger"
 import { SolveBreakpointDialog } from "./SolveBreakpointDialog"
-import { RELAXED_DRC_OPTIONS } from "./drcPresets"
+import { evaluateRelaxedDrc } from "./evaluate-relaxed-drc"
 import { getDrcErrors } from "./getDrcErrors"
 import { getCurrentCircuitJson } from "./autorouting-pipeline-debugger/getCurrentCircuitJson"
 import { extractCapacityMeshNodeIdFromObjectLabel } from "./utils/extractCapacityMeshNodeIdFromObjectLabel"
@@ -60,6 +61,7 @@ const PIPELINE_SOLVERS = {
   AutoroutingPipelineSolver6,
   AutoroutingPipelineSolver7_MultiGraph,
   AutoroutingPipelineSolver8,
+  AutoroutingPipelineSolver9_PreloadedTraceGraph,
   AssignableAutoroutingPipeline1Solver,
   AssignableAutoroutingPipeline2,
   AssignableAutoroutingPipeline3,
@@ -798,41 +800,28 @@ export const AutoroutingPipelineDebugger = ({
   // Run DRC checks on the current routes
   const runDrcChecks = (mode: "strict" | "relaxed") => {
     try {
-      // Get the SRJ with point pairs from the NetToPointPairsSolver
-      const srjWithPointPairs =
-        solver.netToPointPairsSolver?.getNewSimpleRouteJson() ||
-        solver.srjWithPointPairs
+      let drcResult: ReturnType<typeof getDrcErrors>
+      if (mode === "relaxed") {
+        const traces = solver.failed
+          ? []
+          : (solver.getOutputSimplifiedPcbTraces?.() ?? [])
+        drcResult = evaluateRelaxedDrc({
+          inputSrj: srj,
+          srjWithPointPairs: solver.srjWithPointPairs ?? srj,
+          routedTraces: traces,
+        })
+      } else {
+        const circuitJson =
+          getCurrentCircuitJson(solver, (message) => window.alert(message)) ??
+          []
 
-      if (!srjWithPointPairs) {
-        alert(
-          "No connection information available. Wait until the NetToPointPairsSolver completes.",
-        )
-        return
+        if (circuitJson.length === 0) {
+          return
+        }
+        drcResult = getDrcErrors(circuitJson)
       }
 
-      const routes: any = solver?.getOutputSimplifiedPcbTraces()
-
-      // Neither available, show error
-      if (!routes) {
-        alert(
-          "No routes available yet. Complete routing first or proceed to high-density routing stage.",
-        )
-        return
-      }
-
-      // Convert to circuit-json format with both connection information and
-      // original physical obstacle geometry for DRC.
-      const circuitJson =
-        getCurrentCircuitJson(solver, (message) => window.alert(message)) ?? []
-
-      if (circuitJson.length === 0) {
-        return
-      }
-
-      const { errors: allErrors, locationAwareErrors } =
-        mode === "relaxed"
-          ? getDrcErrors(circuitJson, RELAXED_DRC_OPTIONS)
-          : getDrcErrors(circuitJson)
+      const { errors: allErrors, locationAwareErrors } = drcResult
 
       setLastDrcMode(mode)
 

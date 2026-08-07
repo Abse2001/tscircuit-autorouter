@@ -23,6 +23,7 @@ export {
   AutoroutingPipelineSolver7_MultiGraph as AutoroutingPipelineSolver,
 } from "./autorouter-pipelines/AutoroutingPipeline7_MultiGraph/AutoroutingPipelineSolver7_MultiGraph"
 export { AutoroutingPipelineSolver8 } from "./autorouter-pipelines/AutoroutingPipeline8/AutoroutingPipelineSolver8"
+export { AutoroutingPipelineSolver9_PreloadedTraceGraph } from "./autorouter-pipelines/AutoroutingPipeline9_PreloadedTraceGraph/autorouting-pipeline-solver9-preloaded-trace-graph"
 export { PolyHighDensitySolver } from "./autorouter-pipelines/AutoroutingPipeline6_PolyHypergraph/PolyHighDensitySolver"
 export { PolySingleIntraNodeSolver } from "./autorouter-pipelines/AutoroutingPipeline6_PolyHypergraph/PolySingleIntraNodeSolver"
 export { PolyIntraNodeSolver } from "./autorouter-pipelines/AutoroutingPipeline6_PolyHypergraph/PolyIntraNodeSolver"
@@ -72,6 +73,18 @@ export type {
   GlobalDrcBranchPortfolioSolverParams,
   GlobalDrcForceImproveSolverParams,
   HighDensityRoute,
+} from "high-density-repair03/lib"
+export type {
+  BusId,
+  ConnectionPoint,
+  DifferentialPair,
+  MultiLayerConnectionPoint,
+  Obstacle,
+  SimpleRouteBus,
+  SimpleRouteConnection,
   SimpleRouteJson,
   SimplifiedPcbTrace,
-} from "high-density-repair03/lib"
+  SimplifiedPcbTraces,
+  SingleLayerConnectionPoint,
+  TerminalViaHint,
+} from "./types/srj-types"

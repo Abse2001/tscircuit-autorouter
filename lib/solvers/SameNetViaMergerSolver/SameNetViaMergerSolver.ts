@@ -14,6 +14,8 @@ import { segmentToBoxMinDistance } from "@tscircuit/math-utils"
 
 export interface SameNetViaMergerSolverInput {
   inputHdRoutes: HighDensityRoute[]
+  /** Routed copper that participates in collision checks but is never changed. */
+  otherHdRoutes?: ReadonlyArray<HighDensityRoute>
   obstacles: Obstacle[]
   colorMap: Record<string, string>
   layerCount: number
@@ -33,11 +35,20 @@ type Via = {
 const NEAR_VIA_MERGE_DISTANCE_MULTIPLIER = 2.5
 const OBSTACLE_MARGIN = 0.1
 
+const tryGetNetForRoute = (
+  connMap: ConnectivityMap,
+  route: HighDensityRoute,
+): string | undefined =>
+  connMap.idToNetMap[route.connectionName] ??
+  (route.rootConnectionName
+    ? connMap.idToNetMap[route.rootConnectionName]
+    : undefined)
+
 const getNetForRoute = (
   connMap: ConnectivityMap,
   route: HighDensityRoute,
 ): string => {
-  const net = connMap.idToNetMap[route.connectionName]
+  const net = tryGetNetForRoute(connMap, route)
   if (!net) {
     throw new Error(
       `SameNetViaMergerSolver could not find net for route "${route.connectionName}"`,
@@ -111,7 +122,9 @@ const canMoveViaTo = (
 
     for (const { conflictingRoute, distance } of conflictingRoutes) {
       if (conflictingRoute.connectionName === route.connectionName) continue
-      if (getNetForRoute(context.connMap, conflictingRoute) === viaToRemove.net)
+      if (
+        tryGetNetForRoute(context.connMap, conflictingRoute) === viaToRemove.net
+      )
         continue
 
       const minDistance =
@@ -170,6 +183,13 @@ export class SameNetViaMergerSolver extends BaseSolver {
   obstacleSHI: ObstacleSpatialHashIndex
   hdRouteSHI: HighDensityRouteSpatialIndex
 
+  private createHdRouteSpatialIndex(): HighDensityRouteSpatialIndex {
+    return new HighDensityRouteSpatialIndex([
+      ...this.mergedViaHdRoutes,
+      ...(this.input.otherHdRoutes ?? []),
+    ])
+  }
+
   constructor(private input: SameNetViaMergerSolverInput) {
     super()
     if (!input.connMap) {
@@ -192,7 +212,7 @@ export class SameNetViaMergerSolver extends BaseSolver {
       "flatbush",
       this.input.obstacles,
     )
-    this.hdRouteSHI = new HighDensityRouteSpatialIndex(this.inputHdRoutes)
+    this.hdRouteSHI = this.createHdRouteSpatialIndex()
     this.vias = []
     this.offendingVias = []
     this.connMap = input.connMap
@@ -444,7 +464,7 @@ export class SameNetViaMergerSolver extends BaseSolver {
       }
     }
     this.rebuildVias()
-    this.hdRouteSHI = new HighDensityRouteSpatialIndex(this.mergedViaHdRoutes)
+    this.hdRouteSHI = this.createHdRouteSpatialIndex()
     this.stats.mergedViaGroups = groups.length
     this.stats.mergedViaCount = mergedViaCount
   }

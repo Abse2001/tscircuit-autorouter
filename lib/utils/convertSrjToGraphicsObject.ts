@@ -7,13 +7,14 @@ import {
   getGraphicsLayerForConnectionPoint,
   getGraphicsLayerForObstacle,
   getGraphicsLayerFromLayerNames,
+  getGraphicsZLayersForObstacle,
 } from "lib/utils/getGraphicsObjectLayer"
 import { getViaDimensions } from "lib/utils/getViaDimensions"
 import { JUMPER_DIMENSIONS } from "lib/utils/jumperSizes"
 import { mapLayerNameToZ } from "lib/utils/mapLayerNameToZ"
-import type { LayerName } from "lib/utils/mapZToLayerName"
+import { type LayerName, mapZToLayerName } from "lib/utils/mapZToLayerName"
 
-const TRACE_LAYER_COLORS = {
+const GRAPHICS_LAYER_COLORS = {
   top: "red",
   bottom: "blue",
   inner1: "green",
@@ -26,18 +27,20 @@ const TRACE_LAYER_COLORS = {
   inner8: "brown",
 } satisfies Record<LayerName, string>
 
+const OBSTACLE_LAYER_TRANSPARENCY = 0.5
+
 export type TraceColorMode = "layer" | "net"
 
 export type ConvertSrjToGraphicsObjectOptions = {
   traceColorMode?: TraceColorMode
 }
 
-function getTraceLayerColor(layerName: string): string {
-  if (!Object.hasOwn(TRACE_LAYER_COLORS, layerName)) {
-    throw new Error(`No trace visualization color for layer "${layerName}"`)
+function getGraphicsLayerColor(layerName: string): string {
+  if (!Object.hasOwn(GRAPHICS_LAYER_COLORS, layerName)) {
+    throw new Error(`No visualization color for layer "${layerName}"`)
   }
 
-  return TRACE_LAYER_COLORS[layerName as LayerName]
+  return GRAPHICS_LAYER_COLORS[layerName as LayerName]
 }
 
 export const convertSrjToGraphicsObject = (
@@ -232,7 +235,7 @@ export const convertSrjToGraphicsObject = (
           const baseColor =
             traceColorMode === "net"
               ? colorMap[trace.connection_name]!
-              : getTraceLayerColor(routePoint.layer)
+              : getGraphicsLayerColor(routePoint.layer)
 
           // Create a line between consecutive wire segments on the same layer
           lines.push({
@@ -259,12 +262,32 @@ export const convertSrjToGraphicsObject = (
   // Add obstacle rects
   for (const o of srj.obstacles) {
     if (o.isCopperPour) continue
+    const obstacleZLayers = getGraphicsZLayersForObstacle(o, layerCount)
+    if (obstacleZLayers.length === 0) {
+      throw new Error(
+        `Cannot visualize obstacle "${o.obstacleId ?? "unknown"}" without a valid layer: layers=${o.layers.join(",")}, __zLayers=${o.__zLayers?.join(",") ?? "unset"}, layerCount=${layerCount}`,
+      )
+    }
+
+    const onlyLayerName =
+      obstacleZLayers.length === 1
+        ? mapZToLayerName(obstacleZLayers[0]!, layerCount)
+        : null
+    const obstacleColor =
+      onlyLayerName === "bottom"
+        ? getGraphicsLayerColor("bottom")
+        : getGraphicsLayerColor("top")
+
+    // Match stacked 50%-opaque red rectangles without duplicating geometry.
+    const obstacleTransparency =
+      OBSTACLE_LAYER_TRANSPARENCY ** obstacleZLayers.length
+
     rects.push({
       center: o.center,
       width: o.width,
       height: o.height,
       ccwRotationDegrees: o.ccwRotationDegrees,
-      fill: "rgba(255,0,0,0.5)",
+      fill: safeTransparentize(obstacleColor, obstacleTransparency),
       layer: getGraphicsLayerForObstacle(o, layerCount),
       label: formatObstacleLabel(o),
     })

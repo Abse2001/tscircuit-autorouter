@@ -13,6 +13,7 @@ import type {
   CapacityMeshNodeId,
   SimpleRouteConnection,
 } from "lib/types"
+import type { PreloadedTracePortAssignment } from "lib/solvers/AvailableSegmentPointSolver/AvailableSegmentPointSolver"
 
 export type RawPort = {
   portId: string
@@ -23,6 +24,8 @@ export type RawPort = {
   cramped?: boolean
   regions: RegionHg[]
   tinyHypergraphPortPenalty?: number
+  _preloadedFixedNetIds?: string[]
+  _preloadedTracePortAssignments?: PreloadedTracePortAssignment[]
 }
 
 export type RegionPortHg = Omit<RegionPort, "d" | "port"> & {
@@ -46,7 +49,11 @@ export type ConnectionHg = Omit<Connection, "startRegion" | "endRegion"> & {
   simpleRouteConnection?: SimpleRouteConnection
 }
 
-export type ConnectionHgWithSimpleRouteConnection = ConnectionHg & {
+export type ConnectionHgWithNetId = ConnectionHg & {
+  mutuallyConnectedNetworkId: string
+}
+
+export type ConnectionHgWithSimpleRouteConnection = ConnectionHgWithNetId & {
   simpleRouteConnection: SimpleRouteConnection
 }
 
@@ -84,7 +91,7 @@ export type RegionRipCountMap = Map<RegionId, number>
 
 export interface HgPortPointPathingSolverParams {
   graph: HyperGraphHg
-  connections: ConnectionHg[]
+  connections: ConnectionHgWithNetId[]
   colorMap?: Record<string, string>
   inputSolvedRoutes?: SolvedRoutesHg[]
   layerCount: number
